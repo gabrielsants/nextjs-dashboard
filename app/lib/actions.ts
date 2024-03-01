@@ -28,8 +28,24 @@ export type State = {
   message?: string | null;
 };
 
+export type StateCustomer = {
+  errors?: {
+    name?: string[];
+    email?: string[];
+  };
+  message?: string | null;
+};
+
+const FormSchemaCostumer = z.object({
+  id: z.string(),
+  name: z.string().min(5, {message: 'Please enter a name with more than 5 characters'}),
+  email: z.string().email({message : 'Please, provide a valid email'}),
+  imageUrl: z.string()
+});
+
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 const UpdateInvoice = FormSchema.omit({ id: true, date: true });
+const CreateCustomer = FormSchemaCostumer.omit({ id: true});
 
 export async function createInvoice(prevState: State, formData: FormData) {
   const validatedFields = CreateInvoice.safeParse({
@@ -126,4 +142,76 @@ export async function authenticate(
     }
     throw error;
   }
+}
+
+export async function createCustomer(prevState: StateCustomer, formData: FormData) {
+  const validatedFields = CreateCustomer.safeParse({
+    name: formData.get('name'),
+    email: formData.get('email'),
+    imageUrl: formData.get('imageUrl')
+  });
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Customer.',
+    };
+  }
+
+  const { name, email, imageUrl } = validatedFields.data;
+
+  try {
+    await sql`
+      INSERT INTO customers (name, email, image_url)
+      VALUES (${name}, ${email}, ${imageUrl})
+    `;
+  } catch (error) {
+    return {
+      message: 'Database Error: Failed to Create Customer.',
+    };
+  }
+  revalidatePath('/dashboard/customers');
+  redirect('/dashboard/customers');
+}
+
+export async function updateCustomer(id: string, prevState: State, formData: FormData) {
+  const validatedFields = CreateCustomer.safeParse({
+    name: formData.get('name'),
+    email: formData.get('email'),
+    imageUrl: formData.get('imageUrl')
+  });
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Update Customer.',
+    };
+  }
+
+  const { name, email, imageUrl } = validatedFields.data;
+
+  try {
+    await sql`
+      UPDATE customers
+      SET name = ${name}, email = ${email}, imageUrl = ${imageUrl}
+      WHERE id = ${id}
+    `;
+  } catch (error) {
+    return {
+      message: 'Database error: Failed to update customer.'
+    }
+  }
+  revalidatePath('/dashboard/customers');
+  redirect('/dashboard/customers');
+}
+
+export async function deleteCustomer(id: string) {
+  try {
+    await sql`DELETE FROM customers WHERE id = ${id}`;
+  } catch (error) {
+    return {
+      message: 'Database error: Failed to delete customer.'
+    };
+  }
+  revalidatePath('/dashboard/customers');
 }
